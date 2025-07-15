@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Income Tax Quiz with Admin</title>
+  <style>
+    body {
+      font-family: Arial;
+      padding: 30px;
+      background-color: #f0fff0;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+    h2, h3 { text-align: center; }
+    .question { font-weight: bold; margin-top: 20px; }
+    .option-btn {
+      display: block;
+      margin: 6px 0;
+      padding: 10px;
+      background: #eef;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .option-btn:hover { background-color: #cce; }
+    .final-score, .correct-answer {
+      font-size: 18px;
+      color: green;
+      margin-top: 20px;
+      text-align: center;
+    }
+    .leaderboard, .admin { margin-top: 30px; text-align: center; }
+    input { padding: 8px; width: 100%; margin: 5px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    canvas { margin-top: 20px; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="container">
+  <h2>🧾 Income Tax Quiz</h2>
+
+  <div id="startArea">
+    <label>Enter your name:</label>
+    <input type="text" id="playerName">
+    <button onclick="startQuiz()">Start Quiz</button>
+  </div>
+
+  <div id="quiz" style="display:none;"></div>
+  <div id="correctAnswer" class="correct-answer"></div>
+  <div id="finalScore" class="final-score"></div>
+
+  <div class="leaderboard" id="leaderboardChartArea" style="display:none;">
+    <h3>🏆 Leaderboard</h3>
+    <canvas id="leaderboardChart" height="300"></canvas>
+  </div>
+
+  <div id="adminLogin">
+    <h3>Admin Login</h3>
+    <input type="text" id="adminID" placeholder="Admin ID">
+    <input type="password" id="adminPass" placeholder="Password">
+    <button onclick="loginAdmin()">Login</button>
+  </div>
+
+  <div class="admin" id="adminDashboard" style="display:none;">
+    <h3>📋 Admin Dashboard</h3>
+    <button onclick="downloadExcel()">📥 Download as Excel</button>
+    <button onclick="resetAll()">🗑 Reset All Data</button>
+    <table>
+      <thead><tr><th>Name</th><th>Score</th></tr></thead>
+      <tbody id="adminTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const quizData = [
+    {
+      question: "Who is the current finance minister of India as of 2025?",
+      options: ["Nitin Gadkari", "Amit Shah", "Nirmala Sitharaman", "Piyush Goyal"],
+      answer: 2
+    },
+    {
+      question: "Which type of income is exempt in both regimes?",
+      options: ["Long-term capital gains", "Agricultural income", "Dividend income", "Rental income"],
+      answer: 1
+    },
+    {
+      question: "Under which regime can you claim the standard deduction on salary income?",
+      options: ["Old regime only", "New regime only", "Both old and new regimes", "Neither regime"],
+      answer: 2
+    },
+    {
+      question: "What is the tax rate for individuals with an annual income above ₹15 lakhs under the old tax regime?",
+      options: ["20%", "25%", "30%", "35%"],
+      answer: 2
+    },
+    {
+      question: "What is the main advantage of the new tax regime over the old regime?",
+      options: ["Lower tax rates with fewer deductions", "More deductions and exemptions", "Higher rebate limits", "No surcharge"],
+      answer: 0
+    },
+    {
+      question: "What is the main reason someone may choose the old regime over the new one?",
+      options: ["Higher tax rates", "More deductions available", "No standard deduction", "Fewer compliance needs"],
+      answer: 1
+    },
+    {
+      question: "Which deduction is still allowed in the new regime?",
+      options: ["80EEA – Housing loan interest", "80E – Education loan", "80CCD(1B) – NPS self contribution", "80CCD(2) – Employer’s NPS contribution"],
+      answer: 3
+    },
+    {
+      question: "For senior citizens (60-80 years), what is the basic exemption limit for income tax?",
+      options: ["₹2.5 lakhs", "₹3 lakhs", "₹3.5 lakhs", "₹5 lakhs"],
+      answer: 1
+    },
+    {
+      question: "Which regime is generally better for taxpayers with many investments and exemptions?",
+      options: ["Old regime", "New regime", "Both are equal", "Depends on income slabs"],
+      answer: 0
+    },
+    {
+      question: "An individual has an annual income of ₹12 lakhs and invests ₹1.5 lakhs in PPF. What would be their taxable income under the old tax regime?",
+      options: ["₹10.5 lakhs", "₹11 lakhs", "₹10 lakhs", "₹9.5 lakhs"],
+      answer: 0
+    }
+  ];
+
+  let currentQuestion = 0;
+  let score = 0;
+  let playerName = "";
+  let leaderboardData = JSON.parse(localStorage.getItem("quizLeaderboard")) || [];
+
+  function startQuiz() {
+    playerName = document.getElementById("playerName").value.trim();
+    if (!playerName) return alert("Please enter your name.");
+    score = 0;
+    currentQuestion = 0;
+    document.getElementById("startArea").style.display = "none";
+    document.getElementById("quiz").style.display = "block";
+    document.getElementById("correctAnswer").innerText = "";
+    loadQuestion();
+  }
+
+  function loadQuestion() {
+    const q = quizData[currentQuestion];
+    const quiz = document.getElementById("quiz");
+    quiz.innerHTML = `
+      <div class="question">${q.question}</div>
+      ${q.options.map((opt, i) =>
+        `<button class="option-btn" onclick="checkAnswer(${i})">${opt}</button>`
+      ).join('')}
+    `;
+  }
+
+  function checkAnswer(index) {
+    const q = quizData[currentQuestion];
+    const correctText = q.options[q.answer];
+    const correct = index === q.answer;
+    if (correct) score++;
+
+    document.getElementById("correctAnswer").innerHTML =
+      `<span style='color:${correct ? "green" : "red"}'>
+        ${correct ? "✅ Correct!" : "❌ Wrong!"} Answer: <strong>${correctText}</strong>
+      </span>`;
+
+    currentQuestion++;
+    if (currentQuestion < quizData.length) {
+      setTimeout(() => {
+        document.getElementById("correctAnswer").innerText = "";
+        loadQuestion();
+      }, 1500);
+    } else {
+      setTimeout(endQuiz, 1500);
+    }
+  }
+
+  function endQuiz() {
+    document.getElementById("quiz").style.display = "none";
+    document.getElementById("correctAnswer").innerText = "";
+    document.getElementById("finalScore").innerText =
+      `${playerName}, you scored ${score} out of ${quizData.length}`;
+    leaderboardData.push({ name: playerName, score });
+    localStorage.setItem("quizLeaderboard", JSON.stringify(leaderboardData));
+    showLeaderboard();
+  }
+
+  function showLeaderboard() {
+    const ctx = document.getElementById("leaderboardChart").getContext("2d");
+    const sorted = [...leaderboardData].sort((a, b) => b.score - a.score);
+    const names = sorted.map(e => e.name);
+    const scores = sorted.map(e => e.score);
+    document.getElementById("leaderboardChartArea").style.display = "block";
+    if (window.myChart) window.myChart.destroy();
+    window.myChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: names,
+        datasets: [{
+          label: "Score",
+          data: scores,
+          backgroundColor: "rgba(54, 162, 235, 0.7)",
+          borderColor: "rgba(54, 162, 235, 1)",
+          borderWidth: 1,
+          borderRadius: 5
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          title: { display: true, text: "Leaderboard (Sorted by Score)" }
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            ticks: { stepSize: 1 }
+          }
+        }
+      }
+    });
+  }
+
+  function loginAdmin() {
+    const id = document.getElementById("adminID").value;
+    const pass = document.getElementById("adminPass").value;
+    if (id === "admin" && pass === "1234") {
+      document.getElementById("adminDashboard").style.display = "block";
+      document.getElementById("adminLogin").style.display = "none";
+      renderAdminTable();
+    } else {
+      alert("Incorrect credentials");
+    }
+  }
+
+  function renderAdminTable() {
+    const tbody = document.getElementById("adminTableBody");
+    tbody.innerHTML = leaderboardData.map(e =>
+      `<tr><td>${e.name}</td><td>${e.score}</td></tr>`
+    ).join('');
+  }
+
+  function resetAll() {
+    if (confirm("Are you sure to delete all responses?")) {
+      leaderboardData = [];
+      localStorage.removeItem("quizLeaderboard");
+      renderAdminTable();
+      if (window.myChart) window.myChart.destroy();
+      document.getElementById("leaderboardChartArea").style.display = "none";
+      alert("All data cleared.");
+    }
+  }
+
+  function downloadExcel() {
+    const wb = XLSX.utils.book_new();
+    const wsData = [["Name", "Score"], ...leaderboardData.map(e => [e.name, e.score])];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, "Responses");
+    XLSX.writeFile(wb, "Quiz_Responses.xlsx");
+  }
+</script>
+</body>
+</html>
